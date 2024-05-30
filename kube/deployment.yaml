@@ -1,0 +1,24 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: laravel-kubernetes-demo
+  namespace: laravel-namespace
+spec:
+  selector:
+    matchLabels:
+      run: laravel-kubernetes-demo
+  template:
+    metadata:
+      labels:
+        run: laravel-kubernetes-demo
+    spec:
+      terminationGracePeriodSeconds: 60
+      containers:
+        - name: demo
+          image: anhhoangdocker/php-7.1:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: APP_KEY
+              value: base64:cUPmwHx4LXa4Z25HhzFiWCf7TlQmSqnt98pnuiHmzgY=

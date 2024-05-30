@@ -1,0 +1,71 @@
+name: Deploy to Local Minikube
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+#    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-20.04
+    env:
+      REGISTRY: anhhoangdocker
+      REGISTRY_PASSWORD: ${{ secrets.REGISTRY_PASSWORD }}
+      REGISTRY_LOGIN: duyanhh222@gmail.com
+      IMAGE_TAG: php-7.1
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configure registry credentials
+        run: |
+          echo "$REGISTRY_PASSWORD" | docker login -u $REGISTRY_LOGIN --password-stdin
+
+      - name: Build images
+        run: |
+          docker build . \
+            -t $REGISTRY/$IMAGE_TAG:latest \
+            -f Dockerfile \
+            --cache-from $REGISTRY/$IMAGE_TAG:latest
+
+      - name: Push images
+        run: |
+          docker push $REGISTRY/$IMAGE_TAG:latest
+  deploy:
+#      if: github.event.pull_request.merged == true
+    runs-on: ubuntu-20.04
+    needs: [ build ]
+    env:
+      REGISTRY: anhhoangdocker
+      IMAGE_TAG: php-7.1
+      CA_FILE_PATH: /tmp/ca-file
+      CA_FILE: ${{ secrets.CA_FILE }}
+      CLUSTER: laravel-cluster
+      K8S_SERVER: https://ee73-1-55-242-188.ngrok-free.app/
+      K8S_USER: laravel-admin
+      K8S_TOKEN: ${{ secrets.K8S_TOKEN }}
+      K8S_CONTEXT: laravel
+      K8S_NAMESPACE: laravel-namespace
+      DEPLOYMENT: laravel-kubernetes-demo
+
+    steps:
+      - name: Configure kubectl credentials
+        run: |
+          echo "$CA_FILE" > $CA_FILE_PATH
+          chmod +x $CA_FILE_PATH
+          kubectl config set-cluster $CLUSTER --server=$K8S_SERVER --certificate-authority=$CA_FILE_PATH
+          kubectl config set-credentials $K8S_USER --token $K8S_TOKEN
+          kubectl config set-context $K8S_CONTEXT --user $K8S_USER --namespace $K8S_NAMESPACE --cluster $CLUSTER
+          kubectl config use-context $K8S_CONTEXT
+          echo "kubectl -n $K8S_NAMESPACE get pod"
+
+      - name: Running Deploy
+        run: |
+          kubectl -n $K8S_NAMESPACE set image deployment/$DEPLOYMENT demo=$REGISTRY/$IMAGE_TAG:latest
+          kubectl -n $K8S_NAMESPACE rollout restart deployment/$DEPLOYMENT
+          kubectl -n $K8S_NAMESPACE rollout status deployment/$DEPLOYMENT
+
+      - name: Deploy Success
+        run: |
+          echo "🚀 Application Backend deployed!"
